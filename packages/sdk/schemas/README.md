@@ -48,21 +48,19 @@ from the ATV surface, `https://atv.hacienda.go.cr/ATV/ComprobanteElectronico/`,
   surface today, so the archive is vendored byte-for-byte as published.
 - `Resolucion_General_sobre_disposiciones_tecnicas_comprobantes_electronicos_para_efectos_tributarios.pdf`
   — the v4.4 signing policy cited by Anexo 2, served from
-  `https://cdn.comprobanteselectronicos.go.cr/xml-schemas/` (the literal
-  `xades:Identifier` in Anexo 2 points at `/xmlschemas/…` without the hyphen and
-  returns 403; the file lives at `/xml-schemas/…` — `policy.resolvedUrl` records
-  the working one).
+  `https://cdn.comprobanteselectronicos.go.cr/xml-schemas/` (and byte-identical on ATV).
 
-The `policy` block quotes Anexo 2 of `ANEXOS Y ESTRUCTURAS_V4.4.pdf` verbatim:
+The `policy` block quotes Anexo 2 of `ANEXOS Y ESTRUCTURAS_V4.4.pdf`:
 `identifier`, `digestMethod` (`http://www.w3.org/2001/04/xmlenc#sha256`),
 `digestValue` (`DWxin1xWOeI8OuWQXazh4VjLWAaCLAA954em7DMh0h8=`, Base64 of the
-SHA-256 of the vendored policy PDF), `citation`, `sourceSurface`, `resolvedUrl`
-(working URL for the verbatim `identifier`, which 403s), `sdkStatus`.
+SHA-256 of the vendored policy PDF), `citation`, `sourceSurface`, `resolvedUrl`, `sdkStatus`.
+The identifier wraps across a line in the PDF (`…/xml-` / `schemas/…`); the hyphen is a
+real glyph in the content stream and the hyphenated URL serves the document whose SHA-256
+is the published digest, so `identifier` is the hyphenated URL (the unhyphenated one returns
+403). Evidence: `docs/xades-policy-v4.4.md`.
 The INDENT quotes this digest incorrectly as `DWxin1xWOel8…` (43 chars); the
-value above is the one printed in the PDF itself. `sdkStatus` is
-`pending-sdk-migration`: the signer still uses the old SHA-1/v4.1 policy
-(`XADES_POLICY_HASH`, see `docs/specs/v4.4-compliance.md` §1.10 and §3.5), so
-the correction is a separate, versioned change (phase 3). Allowed values:
+value above is the one printed in the PDF itself. `sdkStatus` is `aligned`: the signer
+uses these values (`XADES_POLICY_URI`, `XADES_POLICY_HASH`). Allowed values:
 `pending-sdk-migration`, `aligned` — a new value requires updating this README.
 
 Field semantics:

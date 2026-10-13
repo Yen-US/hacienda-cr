@@ -1,5 +1,15 @@
 # @dojocoding/hacienda-sdk
 
+## 0.4.1-presencia.1 (fork Yen-US/hacienda-cr)
+
+### Patch Changes
+
+- Sign with the Anexo 2 (v4.4) XAdES-EPES policy: identifier `https://cdn.comprobanteselectronicos.go.cr/xml-schemas/Resoluci%C3%B3n_General_…pdf` and SHA-256 digest `DWxin1xWOeI8OuWQXazh4VjLWAaCLAA954em7DMh0h8=` (was the v4.1 tribunet identifier with SHA-1).
+- Emit the published policy digest: the precomputed digest is now passed to `xadesjs` as `policy.digestValue`; previously it was ignored and the digest of the `Identifier` element was emitted.
+- Omit `Qualifier="OIDAsURN"` on the policy identifier, as in the Anexo 2 example.
+- Updated dependencies
+  - @dojocoding/hacienda-shared@0.4.1-presencia.1
+
 ## 0.4.1
 
 ### Patch Changes

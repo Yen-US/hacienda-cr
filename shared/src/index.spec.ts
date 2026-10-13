@@ -265,7 +265,7 @@ describe("@dojocoding/hacienda-shared", () => {
 
   describe("XAdES policy", () => {
     it("should define the policy hash", () => {
-      expect(XADES_POLICY_HASH).toBe("Ohixl6upD6av8N7pEvDABhEL6hM=");
+      expect(XADES_POLICY_HASH).toBe("DWxin1xWOeI8OuWQXazh4VjLWAaCLAA954em7DMh0h8=");
     });
   });
 

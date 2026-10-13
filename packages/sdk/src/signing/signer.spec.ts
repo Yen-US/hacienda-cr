@@ -13,6 +13,18 @@ import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
+import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
+import xpath from "xpath";
+import * as xadesjs from "xadesjs";
+import {
+  XADES_DIGEST_ALGORITHM,
+  XADES_POLICY_HASH,
+  XADES_POLICY_HASH_ALGORITHM,
+  XADES_POLICY_URI,
+  XADES_POLICY_V41_HASH,
+  XADES_SIGNATURE_ALGORITHM,
+} from "@dojocoding/hacienda-shared";
+
 import { signXml, signAndEncode } from "./signer.js";
 import { loadP12 } from "./p12-loader.js";
 import { SigningError } from "../errors.js";
@@ -229,5 +241,102 @@ describe("signAndEncode", () => {
     const invalidP12 = Buffer.from("not a p12 file");
 
     await expect(signAndEncode(SAMPLE_XML, invalidP12, "any-pin")).rejects.toThrow(SigningError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Signature policy (Anexo 2, v4.4)
+// ---------------------------------------------------------------------------
+
+describe("signature policy", () => {
+  const XADES_NS = "http://uri.etsi.org/01903/v1.3.2#";
+  const DS_NS = "http://www.w3.org/2000/09/xmldsig#";
+
+  function one<T>(list: ArrayLike<T>, what: string): T {
+    const item = list[0];
+    if (!item) throw new Error(`missing ${what}`);
+    return item;
+  }
+
+  async function signedDoc() {
+    expect(p12Buffer, "openssl is required for the policy tests").toBeDefined();
+    const signed = await signXml(SAMPLE_XML, p12Buffer, TEST_P12_PIN);
+    return { signed, doc: new DOMParser().parseFromString(signed, "text/xml") };
+  }
+
+  it("declares the v4.4 policy identifier and its SHA-256 digest", async () => {
+    const { doc } = await signedDoc();
+    const policyId = one(
+      doc.getElementsByTagNameNS(XADES_NS, "SignaturePolicyId"),
+      "SignaturePolicyId",
+    );
+    const identifier = policyId.getElementsByTagNameNS(XADES_NS, "Identifier")[0];
+    expect(identifier?.textContent).toBe(XADES_POLICY_URI);
+    const hash = one(policyId.getElementsByTagNameNS(XADES_NS, "SigPolicyHash"), "SigPolicyHash");
+    expect(hash.getElementsByTagNameNS(DS_NS, "DigestMethod")[0]?.getAttribute("Algorithm")).toBe(
+      XADES_POLICY_HASH_ALGORITHM,
+    );
+    expect(hash.getElementsByTagNameNS(DS_NS, "DigestValue")[0]?.textContent).toBe(
+      XADES_POLICY_HASH,
+    );
+  });
+
+  it("matches the policy block of the vendored manifest (Anexo 2)", () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../../schemas/manifest.json", import.meta.url), "utf8"),
+    ) as { policy: { identifier: string; digestMethod: string; digestValue: string } };
+    expect(XADES_POLICY_URI).toBe(manifest.policy.identifier);
+    expect(XADES_POLICY_HASH_ALGORITHM).toBe(manifest.policy.digestMethod);
+    expect(XADES_POLICY_HASH).toBe(manifest.policy.digestValue);
+  });
+
+  it("never emits the superseded v4.1 policy or a SHA-1 policy digest", async () => {
+    const { signed, doc } = await signedDoc();
+    expect(signed).not.toContain(XADES_POLICY_V41_HASH);
+    expect(signed).not.toContain("tribunet.hacienda.go.cr");
+    const hash = one(doc.getElementsByTagNameNS(XADES_NS, "SigPolicyHash"), "SigPolicyHash");
+    expect(
+      hash.getElementsByTagNameNS(DS_NS, "DigestMethod")[0]?.getAttribute("Algorithm"),
+    ).not.toBe("http://www.w3.org/2000/09/xmldsig#sha1");
+  });
+
+  it("uses RSA-SHA256 and SHA-256 reference digests", async () => {
+    const { doc } = await signedDoc();
+    const signedInfo = one(doc.getElementsByTagNameNS(DS_NS, "SignedInfo"), "SignedInfo");
+    expect(
+      signedInfo.getElementsByTagNameNS(DS_NS, "SignatureMethod")[0]?.getAttribute("Algorithm"),
+    ).toBe(XADES_SIGNATURE_ALGORITHM);
+    const digests = Array.from(signedInfo.getElementsByTagNameNS(DS_NS, "DigestMethod"));
+    expect(digests.length).toBeGreaterThanOrEqual(2);
+    for (const d of digests) expect(d.getAttribute("Algorithm")).toBe(XADES_DIGEST_ALGORITHM);
+  });
+
+  it("produces a signature that verifies cryptographically", async () => {
+    const { signed } = await signedDoc();
+    xadesjs.setNodeDependencies({ DOMParser, XMLSerializer, xpath });
+    xadesjs.Application.setEngine("NodeJS", globalThis.crypto as Crypto);
+    const doc = xadesjs.Parse(signed);
+    const sig = one(doc.getElementsByTagNameNS(DS_NS, "Signature"), "Signature");
+    const verifier = new xadesjs.SignedXml(doc);
+    verifier.LoadXml(sig);
+    expect(await verifier.Verify()).toBe(true);
+  });
+
+  it("detects tampering after signing", async () => {
+    const { signed } = await signedDoc();
+    const tampered = signed.replace("<TotalComprobante>1000.00", "<TotalComprobante>1.00");
+    xadesjs.setNodeDependencies({ DOMParser, XMLSerializer, xpath });
+    xadesjs.Application.setEngine("NodeJS", globalThis.crypto as Crypto);
+    const doc = xadesjs.Parse(tampered);
+    const verifier = new xadesjs.SignedXml(doc);
+    verifier.LoadXml(one(doc.getElementsByTagNameNS(DS_NS, "Signature"), "Signature"));
+    const verified = await verifier.Verify().catch(() => false);
+    expect(verified).toBe(false);
+  });
+
+  it("emits the policy Identifier without a Qualifier, as in the Anexo 2 example", async () => {
+    const { doc } = await signedDoc();
+    const identifier = one(doc.getElementsByTagNameNS(XADES_NS, "Identifier"), "Identifier");
+    expect(identifier.hasAttribute("Qualifier")).toBe(false);
   });
 });

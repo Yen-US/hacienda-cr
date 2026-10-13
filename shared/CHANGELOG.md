@@ -1,5 +1,11 @@
 # @dojocoding/hacienda-shared
 
+## 0.4.1-presencia.1 (fork Yen-US/hacienda-cr)
+
+### Patch Changes
+
+- `XADES_POLICY_URI`, `XADES_POLICY_HASH` and `XADES_POLICY_HASH_ALGORITHM` now hold the Anexo 2 (v4.4) policy (SHA-256). New `XADES_POLICY_HASH_NAME`. The v4.1 values remain as deprecated `XADES_POLICY_V41_URI` / `XADES_POLICY_V41_HASH`.
+
 ## 0.4.1
 
 ### Patch Changes
