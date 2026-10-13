@@ -4,7 +4,7 @@ import { checkXmlInput } from "../xml/input-limits.js";
  * XAdES-EPES XML signing for Hacienda Costa Rica.
  *
  * Signs XML documents according to XAdES-EPES v1.3.2+ requirements:
- * - Policy URI and SHA-1 policy hash
+ * - Anexo 2 (v4.4) policy identifier and SHA-256 policy hash
  * - RSA 2048 + SHA-256 signature
  * - Canonical XML 1.0 (C14N) canonicalization
  *
@@ -19,7 +19,11 @@ import xpath from "xpath";
 import * as xadesjs from "xadesjs";
 import * as xmldsigjs from "xmldsigjs";
 
-import { XADES_POLICY_HASH, XADES_POLICY_URI } from "@dojocoding/hacienda-shared";
+import {
+  XADES_POLICY_HASH,
+  XADES_POLICY_HASH_NAME,
+  XADES_POLICY_URI,
+} from "@dojocoding/hacienda-shared";
 
 import { SigningError } from "../errors.js";
 import { loadP12 } from "./p12-loader.js";
@@ -56,7 +60,7 @@ function ensureInitialized(): void {
  *
  * Implements the full Hacienda XAdES-EPES v1.3.2+ signing:
  * - Enveloped signature (inserted into the XML document)
- * - SignaturePolicy with Hacienda's policy URI and SHA-1 hash
+ * - SignaturePolicy with Hacienda's v4.4 policy identifier and SHA-256 hash
  * - RSA-SHA256 signature algorithm
  * - Canonical XML 1.0 canonicalization
  * - X.509 certificate embedded in KeyInfo
@@ -111,15 +115,14 @@ export async function signXml(xml: string, p12Buffer: Buffer, p12Pin: string): P
       xmlDoc,
       {
         // XAdES-EPES policy
+        // XAdES-EPES policy exactly as in the Anexo 2 (v4.4) example: the policy PDF URL as
+        // Identifier (no Qualifier) and the published digest of that PDF. xadesjs only uses a
+        // precomputed digest when it is passed as `digestValue`; otherwise it digests the
+        // Identifier element itself, which is not the policy hash.
         policy: {
-          // xadesjs extends AlgorithmIdentifier with a runtime `value` property
-          // for pre-computed digest values. The types don't reflect this, so we cast.
-          hash: {
-            name: "SHA-1",
-            value: Buffer.from(XADES_POLICY_HASH, "base64"),
-          } as unknown as AlgorithmIdentifier,
+          hash: XADES_POLICY_HASH_NAME,
+          digestValue: XADES_POLICY_HASH,
           identifier: {
-            qualifier: "OIDAsURN",
             value: XADES_POLICY_URI,
           },
         },
